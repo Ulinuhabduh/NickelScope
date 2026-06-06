@@ -1,0 +1,35 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- QGIS / ESRI / GIS junk (regenerable) ---
+*.aux.xml
+*.points
+*.sbn
+*.sbx
+*.lyr
+*.qgz~
+*.qgs~
+
+# --- Editor ---
+.vscode/
+.idea/
+
+# --- Berkas besar / sementara (jangan commit) ---
+# Raster mentah/georeferensi besar — regenerasi dari GEE bila perlu
+*_modified.tif
+*_geo.tif
+PetaGeoreferencer.tif
+*.zip.tmp
+
+# Catatan: data/*.tif & data/*.csv SENGAJA di-commit (hasil & input ringan).
