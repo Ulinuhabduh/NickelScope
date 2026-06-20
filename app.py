@@ -670,19 +670,32 @@ def main():
             try:
                 for chunk in stream_response(question, state.chat_history, state):
                     q.put(chunk)
+            except Exception:
+                pass
             finally:
                 q.put(None)
         threading.Thread(target=_run, daemon=True).start()
 
         response_text = ''
+        update_counter = 0
         while True:
-            chunk = await asyncio.to_thread(q.get)
+            try:
+                chunk = q.get_nowait()
+            except queue.Empty:
+                await asyncio.sleep(0.05)
+                continue
             if chunk is None:
                 break
             response_text += chunk
-            with typing_card.clear():
-                ui.markdown(response_text)
-            ui.run_javascript('document.querySelector(".ns-chat-window").scrollTop = 99999')
+            update_counter += 1
+            if update_counter % 3 == 0 or len(chunk) > 10:
+                with typing_card.clear():
+                    ui.markdown(response_text)
+                ui.run_javascript('document.querySelector(".ns-chat-window").scrollTop = 99999')
+
+        with typing_card.clear():
+            ui.markdown(response_text)
+        ui.run_javascript('document.querySelector(".ns-chat-window").scrollTop = 99999')
 
         state.chat_history.append({"role": "assistant", "content": response_text})
 
