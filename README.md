@@ -1,139 +1,177 @@
-# NickelScope v2
+# NickelScope v3
 
-### Interactive AI-GIS Research Tool untuk Eksplorasi Nikel Laterit
+### Interactive AI-GIS Research Tool for Nickel Laterite Prospectivity
 
-> **ANTAM Hackathon 2026 — Young Mining Innovators** · Tema: **Eksplorasi**
-> Studi kasus: **Sabuk Pomalaa–Kolaka, Sulawesi Tenggara**
+> **ANTAM Hackathon 2026 — Young Mining Innovators** · Theme: **Exploration**
+> Case study: **Pomalaa–Kolaka Belt, Southeast Sulawesi**
 
-NickelScope adalah **interactive research tool** — user gambar rectangle di peta,
-model memprediksi probabilitas nikel laterit, lalu **SHAP Explainable AI**
-menjelaskan **mengapa** model memutuskan begitu, lengkap dengan konteks geologis.
+NickelScope is an **interactive AI-GIS research tool** — users draw a rectangle on a map,
+GEE extracts features in real-time, ML predicts prospectivity probability,
+geological context is displayed, and an AI chatbot assists with interpretation.
 
 ---
 
-## Alur Kerja
+## Workflow
 
 ```
 User draws rectangle on map
         │
         ▼
-Grid points generated (IDW interpolation)
+Real-time GEE feature extraction (Sentinel-2, SRTM, MERIT Hydro)
         │
         ▼
-Random Forest prediction → probability 0–1
+Random Forest prediction → probability 0–1 + uncertainty
         │
         ▼
-SHAP TreeExplainer → feature contributions
+Geological context → rock type classification
         │
         ▼
-Geological context → interpretation
+AI Chatbot (Groq GPT OSS 120B) → natural language interpretation
+        │
+        ▼
+PDF Report → professional multi-page export
 ```
 
 ---
 
-## Cara Pakai
+## How to Use
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+python app.py
 ```
 
-1. Klik ikon **persegi** di pojok kiri atas peta
-2. Gambar rectangle di area yang ingin diresearch
-3. Klik **Retrieved GeoJSON** untuk submit
-4. Lihat hasil: probability heatmap, SHAP analysis, geological context
+1. Click the **rectangle** icon on the map (top-left)
+2. Draw a rectangle over the area of interest
+3. Click **Process Area** to extract features and predict
+4. View results: probability heatmap, cross-section, rock types
+5. Ask the AI chatbot for interpretation
+6. Export results as CSV, GeoJSON, or PDF report
 
 ---
 
-## Arsitektur Sistem
+## Architecture
 
-| Komponen | Teknologi | Fungsi |
-|----------|-----------|--------|
-| Frontend | Streamlit + Folium | Map interaction, visualization |
-| ML Model | Random Forest (400 trees) | Probabilistic prediction |
-| XAI | SHAP TreeExplainer | Feature contribution explanation |
-| Feature Eng | IDW Interpolation | Grid point feature extraction |
-| Geology | GeoMap ESDM 1:100k | Lithological context |
+| Component | Technology | Function |
+|-----------|-----------|----------|
+| Frontend | NiceGUI + Leaflet | Map interaction, real-time UI |
+| ML Model | Random Forest (400 trees) | Probabilistic prediction + uncertainty |
+| Feature Eng | Google Earth Engine | Real-time Sentinel-2, SRTM, MERIT Hydro |
+| Geology | GeoMap ESDM 1:100k | 34 province lithological overlay |
+| AI Chat | Groq GPT OSS 120B | Natural language interpretation |
+| Report | ReportLab | Multi-page PDF generation |
+| Deployment | Docker + Railway | Cloud deployment |
 
 ---
 
-## Struktur Repositori
+## Project Structure
 
 ```
 NickelScope/
-├── app.py                        # Interactive research tool (Streamlit v2)
-├── gee/                          # Google Earth Engine scripts
-│   ├── 01_aoi_explore.js
-│   ├── 02_footprint_detect.js
-│   ├── 03_sampling_points.js
-│   ├── 04_feature_engineering.js
-│   ├── 05_prospectivity_map.js
-│   ├── 06_hostrock_features.js
-│   └── 07_hostrock_map.js
-├── ml/
-│   ├── 01_train_model.py         # RF/XGBoost + spatial CV
-│   ├── 02_hostrock_refine.py     # Host-rock constrained (final model)
-│   └── outputs/                  # Trained model & metrics
-├── data/                         # CSV features + raster
-├── kolaka/                       # Peta geologi resmi (vektor)
-├── figures/                      # Publication figures
-├── docs/                         # Technical documentation
-└── requirements.txt              # Python dependencies
+├── app.py                    # Main NiceGUI application
+├── nickelscope/
+│   ├── __init__.py
+│   ├── geology.py            # Rock classification, province loading
+│   ├── gee.py                # Google Earth Engine feature extraction
+│   ├── ml.py                 # Model loading + prediction
+│   ├── chat.py               # AI chatbot (Groq)
+│   ├── report.py             # PDF report generator
+│   └── maps.py               # Legacy Folium maps (unused)
+├── static/
+│   └── ns-map-capture.js     # Leaflet draw event capture
+├── ml/outputs/
+│   └── nickelscope_model_hostrock.joblib
+├── data/
+│   ├── geology_indonesia/    # Merged GeoPackage (80MB)
+│   └── province_geojson/     # Cached province GeoJSON
+├── Dockerfile
+├── railway.json
+├── render.yaml
+└── requirements.txt
 ```
 
 ---
 
-## Fitur Input (8 Fitur)
+## Input Features (8 Features)
 
-| Fitur | Keterangan | Sumber |
-|-------|-----------|--------|
-| Iron Oxide | Rasio B4/B2 | Sentinel-2 |
-| Ferrous | Rasio B11/B8 | Sentinel-2 |
-| Clay | Rasio B11/B12 | Sentinel-2 |
-| NDVI | Indeks Vegetasi | Sentinel-2 |
-| Elevation | Ketinggian (m) | SRTM 30m |
-| Slope | Kemiringan Lereng (°) | SRTM 30m |
-| Curvature | Lengkungan Permukaan | SRTM 30m |
+| Feature | Description | Source |
+|---------|-------------|--------|
+| Iron Oxide | B4/B2 ratio | Sentinel-2 |
+| Ferrous | B11/B8 ratio | Sentinel-2 |
+| Clay | B11/B12 ratio | Sentinel-2 |
+| NDVI | Vegetation index | Sentinel-2 |
+| Elevation | Height (m) | SRTM 30m |
+| Slope | Slope angle (deg) | SRTM 30m |
+| Curvature | Surface curvature | SRTM 30m |
 | TWI | Topographic Wetness Index | MERIT Hydro |
 
 ---
 
-## Metodologi
+## Methodology
 
 ### Anti-Circularity
-Label training divalidasi terhadap peta geologi resmi. Label di luar host-rock
-ultramafik dibuang untuk mencegah model mendeteksi "lahan terbuka" bukan "nikel laterit".
+Training labels validated against official geological maps. Labels outside
+ultramafic host-rock zones are removed to prevent the model from detecting
+"open land" instead of "nickel laterite".
 
 ### Spatial Cross-Validation
-Menggunakan block CV (3km grid) untuk mencegah spatial autocorrelation inflating metrics.
+Block CV (3km grid) used to prevent spatial autocorrelation from inflating metrics.
 
 ### Host-Rock Constraint
-Prediksi hanya valid dalam buffer 500m dari ultramafic complex.
+Predictions are only valid within 500m buffer of ultramafic complexes.
 
-### Metrik
+### Metrics
 
-| Metode | Spatial CV AUC |
+| Method | Spatial CV AUC |
 |--------|:-:|
-| Naif (terkontaminasi) | 0.988 |
+| Naive (contaminated) | 0.988 |
 | **Host-Rock (valid)** | **0.986** |
 
 ---
 
-## Sumber Data (100% Publik)
+## Data Sources (100% Public)
 
-| Data | Sumber |
+| Data | Source |
 |------|--------|
 | Sentinel-2 | Copernicus / GEE |
 | DEM SRTM 30m | USGS / GEE |
 | TWI | MERIT Hydro |
-| Geologi 1:100k | GeoMap ESDM |
+| Geology 1:100k | GeoMap ESDM (34 provinces) |
 
 ---
 
-## Keterbatasan & Future Work
-- Model condong ke fitur spektral → laterit tersingkap; prediksi di bawah tutupan perlu penguatan
-- Label berbasis proxy permukaan; validasi lapangan diperlukan
-- LLM chatbot untuk penjelasan natural language (rencana v3)
+## Deployment
+
+### Railway (Recommended)
+```bash
+# Push to GitHub
+git init && git add . && git commit -m "Deploy"
+git remote add origin https://github.com/username/nickelscope.git
+git push -u origin main
+
+# Deploy on Railway
+# 1. Connect GitHub repo
+# 2. Railway auto-detects Dockerfile
+# 3. Set environment variables:
+#    - GROQ_API_KEY: your Groq API key
+#    - GEE_SERVICE_ACCOUNT_KEY: GCP service account JSON
+# 4. Deploy
+```
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GROQ_API_KEY` | Groq API key for AI chatbot | Yes |
+| `GEE_SERVICE_ACCOUNT_KEY` | GCP service account JSON for Earth Engine | Optional (fallback to local auth) |
+| `PORT` | Server port (auto-set by Railway) | No |
+
+---
+
+## Limitations & Future Work
+- Model biased toward spectral features → laterite at surface; subsurface predictions need reinforcement
+- Labels based on surface proxy; field validation required
+- Geological overlay could be improved with more detailed formations
 
 ---
 
