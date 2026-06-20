@@ -568,40 +568,74 @@ def main():
         .ns-typing-dot:nth-child(2) { animation-delay: -0.16s; }
         @keyframes ns-bounce { 0%,80%,100% { transform: scale(0); } 40% { transform: scale(1); } }
     </style>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            var win = document.querySelector('.ns-chat-window');
+            var header = win ? win.querySelector('[class*="ns-chat-header"]') : null;
+            if (!win || !header) return;
+            var offsetX = 0, offsetY = 0, isDragging = false;
+            header.addEventListener('mousedown', function(e) {
+                isDragging = true;
+                offsetX = e.clientX - win.getBoundingClientRect().left;
+                offsetY = e.clientY - win.getBoundingClientRect().top;
+                win.style.transition = 'none';
+            });
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging) return;
+                win.style.left = (e.clientX - offsetX) + 'px';
+                win.style.top = (e.clientY - offsetY) + 'px';
+                win.style.right = 'auto';
+                win.style.bottom = 'auto';
+            });
+            document.addEventListener('mouseup', function() { isDragging = false; });
+        }, 500);
+    });
+    </script>
+    </style>
     ''')
 
-    with ui.right_drawer(value=False, bordered=True).classes('ns-chat-drawer').props('width=520') as chat_drawer:
-        with ui.column().classes('w-full h-full p-0'):
-            # ── Header ──
-            with ui.row().classes('ns-chat-header w-full items-center gap-3'):
-                with ui.avatar().classes('bg-white/20'):
-                    ui.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>')
-                with ui.column().classes('ml-1'):
-                    ui.label('NickelScope Assistant').classes('text-white text-sm font-bold')
-                    ui.label('Powered by OpenRouter').classes('text-white/60 text-xs')
-                ui.space()
-                ui.button(on_click=lambda: (chat_drawer.toggle(), ui.run_javascript('document.querySelectorAll("[class*=\'fixed bottom-6 right-6\']")[0].style.display=\'flex\'')), icon='close').props('flat round dense color=white size=sm')
+    # ── Floating Chat Window ──
+    chat_window = ui.element('div').classes('ns-chat-window').style('''
+        position: fixed; bottom: 80px; right: 24px; width: 400px; height: 520px;
+        min-width: 320px; min-height: 300px; max-width: 90vw; max-height: 90vh;
+        background: white; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+        display: none; flex-direction: column; z-index: 9999; overflow: hidden;
+        border: 1px solid #E0E0E0; resize: both;
+    ''')
 
-            # ── Chat Messages (scrollable) ──
-            chat_container = ui.column().classes('flex-1 overflow-y-auto w-full gap-3 p-3 min-w-0')
+    with chat_window:
+        # ── Header (draggable) ──
+        with ui.row().classes('ns-chat-header w-full items-center gap-3').style('cursor: move;'):
+            with ui.avatar().classes('bg-white/20'):
+                ui.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>')
+            with ui.column().classes('ml-1'):
+                ui.label('NickelScope Assistant').classes('text-white text-sm font-bold')
+                ui.label('Powered by OpenRouter').classes('text-white/60 text-xs')
+            ui.space()
+            ui.button(icon='minimize', on_click=lambda: ui.run_javascript('document.querySelector(".ns-chat-window").style.display="none"')).props('flat round dense color=white size=sm')
+            ui.button(icon='close', on_click=lambda: (ui.run_javascript('document.querySelector(".ns-chat-window").style.display="none"'), ui.run_javascript('document.querySelectorAll("[class*=\'fixed bottom-6 right-6\']")[0].style.display=\'flex\''))).props('flat round dense color=white size=sm')
 
-            with chat_container:
-                with ui.card().classes('ns-chat-msg ns-chat-msg-bot'):
-                    ui.markdown(get_initial_message())
+        # ── Chat Messages (scrollable) ──
+        chat_container = ui.column().classes('flex-1 overflow-y-auto w-full gap-3 p-3 min-w-0')
 
-            # ── Suggestion Chips (fixed) ──
-            with ui.row().classes('w-full gap-1 px-3 py-1 flex-wrap justify-center items-center').style('border-top: 1px solid #F0F0F0; background: #FAFBFC;'):
-                ui.label('Quick:').classes('text-xs text-gray-400 mr-1')
-                for chip in ['Iron oxide?', 'Prospective rocks?', 'TWI?']:
-                    def _make_chip_handler(text):
-                        return lambda: _send_chat(text)
-                    ui.button(chip, on_click=_make_chip_handler(chip)).classes('ns-chat-chip')
+        with chat_container:
+            with ui.card().classes('ns-chat-msg ns-chat-msg-bot'):
+                ui.markdown(get_initial_message())
 
-            # ── Input Area (fixed bottom) ──
-            with ui.row().classes('w-full items-center gap-2 px-3 py-2').style('background: white; border-top: 1px solid #E8EAF6;'):
-                with ui.card().classes('ns-chat-input flex-1 items-center').style('padding: 2px 8px;'):
-                    chat_input = ui.input(placeholder='Ask about nickel laterite geology...').classes('w-full').props('borderless dense')
-                send_btn = ui.button(icon='send').props('round color=primary size=sm')
+        # ── Suggestion Chips ──
+        with ui.row().classes('w-full gap-1 px-3 py-1 flex-wrap justify-center items-center').style('border-top: 1px solid #F0F0F0; background: #FAFBFC;'):
+            ui.label('Quick:').classes('text-xs text-gray-400 mr-1')
+            for chip in ['Iron oxide?', 'Prospective rocks?', 'TWI?']:
+                def _make_chip_handler(text):
+                    return lambda: _send_chat(text)
+                ui.button(chip, on_click=_make_chip_handler(chip)).classes('ns-chat-chip')
+
+        # ── Input Area ──
+        with ui.row().classes('w-full items-center gap-2 px-3 py-2').style('background: white; border-top: 1px solid #E8EAF6;'):
+            with ui.card().classes('ns-chat-input flex-1 items-center').style('padding: 2px 8px;'):
+                chat_input = ui.input(placeholder='Ask about nickel laterite geology...').classes('w-full').props('borderless dense')
+            send_btn = ui.button(icon='send').props('round color=primary size=sm')
 
     async def _send_chat(question=None):
         if question is None:
@@ -628,7 +662,7 @@ def main():
                     for i in range(3):
                         ui.html(f'<div class="ns-typing-dot" style="width:7px;height:7px;border-radius:50%;background:#90A4AE;display:inline-block;margin:0 2px;"></div>')
 
-        ui.run_javascript('document.querySelector(".ns-chat-drawer").scrollTop = 99999')
+        ui.run_javascript('document.querySelector(".ns-chat-window").scrollTop = 99999')
 
         import queue, threading
         q = queue.Queue()
@@ -648,7 +682,7 @@ def main():
             response_text += chunk
             with typing_card.clear():
                 ui.markdown(response_text)
-            ui.run_javascript('document.querySelector(".ns-chat-drawer").scrollTop = 99999')
+            ui.run_javascript('document.querySelector(".ns-chat-window").scrollTop = 99999')
 
         state.chat_history.append({"role": "assistant", "content": response_text})
 
@@ -664,13 +698,15 @@ def main():
     chat_fab = ui.button(icon='chat').classes('fixed bottom-6 right-6 z-[9999] shadow-lg').props('round color=primary fab')
 
     def toggle_chat():
-        chat_drawer.toggle()
         ui.run_javascript('''
+            var win = document.querySelector(".ns-chat-window");
             var fab = document.querySelector("[class*='fixed bottom-6 right-6']");
-            var drawer = document.querySelector(".ns-chat-drawer");
-            if (drawer && fab) {
-                var isOpen = drawer.offsetParent !== null && getComputedStyle(drawer).display !== 'none';
-                fab.style.display = isOpen ? 'none' : 'flex';
+            if (win.style.display === "none" || win.style.display === "") {
+                win.style.display = "flex";
+                fab.style.display = "none";
+            } else {
+                win.style.display = "none";
+                fab.style.display = "flex";
             }
         ''')
 
