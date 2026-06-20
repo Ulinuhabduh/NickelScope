@@ -1,8 +1,11 @@
 """Google Earth Engine — feature extraction & land cover sampling."""
 import json
 import os
+import logging
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 PROJECT = "robotic-goal-480609-j0"
 FEATS = ["iron_oxide", "ferrous", "clay", "ndvi",
@@ -12,20 +15,29 @@ FEATS = ["iron_oxide", "ferrous", "clay", "ndvi",
 def init_gee():
     try:
         import ee
+
         try:
             ee.Initialize(project=PROJECT)
+            return ee
         except Exception:
-            sa_key = os.environ.get("GEE_SERVICE_ACCOUNT_KEY")
-            if sa_key:
+            pass
+
+        sa_key = os.environ.get("GEE_SERVICE_ACCOUNT_KEY")
+        if sa_key:
+            try:
                 creds = json.loads(sa_key)
                 service_account = creds["client_email"]
                 credentials = ee.ServiceAccountCredentials(service_account, key_data=sa_key)
                 ee.Initialize(credentials, project=PROJECT)
-            else:
-                ee.Authenticate()
-                ee.Initialize(project=PROJECT)
-        return ee
+                return ee
+            except Exception as e:
+                logger.warning("Service account init failed: %s", e)
+
+        logger.warning("GEE initialization failed — running without Earth Engine")
+        return None
+
     except ImportError:
+        logger.warning("earthengine-api not installed — running without Earth Engine")
         return None
 
 

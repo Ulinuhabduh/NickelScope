@@ -10,7 +10,7 @@ try:
     os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 except Exception:
     pass
-import numpy as np, asyncio, json, tempfile
+import numpy as np, pandas as pd, asyncio, json, tempfile
 from pathlib import Path
 from scipy.interpolate import griddata
 import matplotlib
@@ -19,6 +19,12 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import io, base64
 from nicegui import ui, app
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
+
+@app.get('/healthcheck')
+def healthcheck():
+    return PlainTextResponse('OK')
 
 PROV_GEOJSON_DIR = Path(__file__).resolve().parent / "data" / "province_geojson"
 PROV_GEOJSON_DIR.mkdir(parents=True, exist_ok=True)
@@ -36,7 +42,7 @@ from nickelscope.geology import (
     classify_rock, PROVINCE_LABELS, _get_province_dirs,
     province_to_geojson,
 )
-from nickelscope.gee import init_gee, build_gee_features, get_geology_from_local
+from nickelscope.gee import init_gee, build_gee_features, get_geology_from_local, _make_grid
 from nickelscope.ml import load_model, predict_grid, FEATS
 from nickelscope.chat import get_initial_message, stream_response, get_full_response
 from nickelscope.report import generate_report
@@ -458,9 +464,16 @@ def main():
         s = int(scale.value)
         n = int(resolution.value) ** 2
         try:
-            status_label.set_text(f'Step 1/2 - Extracting features ({n} points)...')
-            status_label.classes(replace='text-xs text-blue-500')
-            grid = await asyncio.to_thread(build_gee_features, ee, b[0], b[1], b[2], b[3], scale=s, n_points=n)
+            if ee is None:
+                status_label.set_text('GEE not available. Using local data only...')
+                status_label.classes(replace='text-xs text-yellow-600')
+                grid = pd.DataFrame(_make_grid(b[0], b[1], b[2], b[3], n), columns=['lon', 'lat'])
+                for feat in FEATS:
+                    grid[feat] = 0.0
+            else:
+                status_label.set_text(f'Step 1/2 - Extracting features ({n} points)...')
+                status_label.classes(replace='text-xs text-blue-500')
+                grid = await asyncio.to_thread(build_gee_features, ee, b[0], b[1], b[2], b[3], scale=s, n_points=n)
             status_label.set_text('Step 2/2 - Querying geology data...')
             rock_data = await asyncio.to_thread(get_geology_from_local, b[0], b[1], b[2], b[3], n_points=n)
             grid['rock_type'] = rock_data['rock_type'].values[:len(grid)]
