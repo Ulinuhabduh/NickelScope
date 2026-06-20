@@ -578,7 +578,7 @@ def main():
                     ui.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>')
                 with ui.column().classes('ml-1'):
                     ui.label('NickelScope Assistant').classes('text-white text-sm font-bold')
-                    ui.label('Powered by GPT OSS 120B').classes('text-white/60 text-xs')
+                    ui.label('Powered by OpenRouter').classes('text-white/60 text-xs')
                 ui.space()
                 ui.button(on_click=lambda: (chat_drawer.toggle(), ui.run_javascript('document.querySelectorAll("[class*=\'fixed bottom-6 right-6\']")[0].style.display=\'flex\'')), icon='close').props('flat round dense color=white size=sm')
 

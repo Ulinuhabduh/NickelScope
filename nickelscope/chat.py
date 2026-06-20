@@ -1,20 +1,21 @@
-"""AI Chatbot — Groq GPT OSS 120B powered NickelScope Assistant."""
+"""AI Chatbot — NickelScope Assistant (OpenRouter)."""
 import os
 from openai import OpenAI
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 _client = None
 
 
 def _get_client():
     global _client
     if _client is None:
-        _client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
+        _client = OpenAI(api_key=OPENROUTER_API_KEY, base_url="https://openrouter.ai/api/v1")
     return _client
 
 
 def _get_model_name():
-    return "openai/gpt-oss-120b"
+    return "openai/gpt-oss-120b:free"
+
 
 SYSTEM_PROMPT = """You are NickelScope Assistant for nickel laterite prospectivity in Indonesia.
 Use context data for specific answers. Be concise, educational. Use markdown."""
