@@ -1,0 +1,9 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+*.zip
+data/province_geojson/*.geojson
+data/overlays/*.png
+*.md
+.opencode
