@@ -1,4 +1,6 @@
 """Google Earth Engine — feature extraction & land cover sampling."""
+import json
+import os
 import numpy as np
 import pandas as pd
 
@@ -13,8 +15,15 @@ def init_gee():
         try:
             ee.Initialize(project=PROJECT)
         except Exception:
-            ee.Authenticate()
-            ee.Initialize(project=PROJECT)
+            sa_key = os.environ.get("GEE_SERVICE_ACCOUNT_KEY")
+            if sa_key:
+                creds = json.loads(sa_key)
+                service_account = creds["client_email"]
+                credentials = ee.ServiceAccountCredentials(service_account, key_data=sa_key)
+                ee.Initialize(credentials, project=PROJECT)
+            else:
+                ee.Authenticate()
+                ee.Initialize(project=PROJECT)
         return ee
     except ImportError:
         return None
