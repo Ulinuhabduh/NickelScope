@@ -162,7 +162,10 @@ def main():
         to_remove = [p for p in state.geo_layers if p not in selected]
         for prov in to_remove:
             lid = state.geo_layers.pop(prov)
-            m.run_method('remove_layer', lid)
+            try:
+                m.run_method('remove_layer', lid)
+            except Exception:
+                pass
 
         await m.initialized()
 
@@ -226,7 +229,10 @@ def main():
                     ui.notify(f'Satellite error: {e}', type='warning')
         else:
             if state.sat_layer:
-                m.remove_layer(state.sat_layer)
+                try:
+                    m.remove_layer(state.sat_layer)
+                except Exception:
+                    pass
                 state.sat_layer = None
 
     show_sat = ui.switch(text='Satellite', value=False)
@@ -397,7 +403,10 @@ def main():
     # ────────────────────── INTERPOLATION OVERLAY ──────────────────────
     def _add_interpolation_overlay(leaflet_map, grid, b):
         if state.interp_layer:
-            leaflet_map.remove_layer(state.interp_layer)
+            try:
+                leaflet_map.remove_layer(state.interp_layer)
+            except Exception:
+                pass
             state.interp_layer = None
         n_grid = 100
         xi = np.linspace(b[0], b[2], n_grid)
@@ -497,10 +506,16 @@ def main():
         state.aoi_bounds = None
         state.last_grid = None
         if state.interp_layer:
-            m.remove_layer(state.interp_layer)
+            try:
+                m.remove_layer(state.interp_layer)
+            except Exception:
+                pass
             state.interp_layer = None
         if state.sat_layer:
-            m.remove_layer(state.sat_layer)
+            try:
+                m.remove_layer(state.sat_layer)
+            except Exception:
+                pass
             state.sat_layer = None
         results_section.clear()
         area_info.set_text('No area selected')
