@@ -1,7 +1,8 @@
 """AI Chatbot — Groq GPT OSS 120B powered NickelScope Assistant."""
+import os
 from openai import OpenAI
 
-GROQ_API_KEY = "Groq-API-KEY"
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 _client = None
 
 
