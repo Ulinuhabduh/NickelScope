@@ -82,7 +82,7 @@ def stream_response(message: str, history: list, state):
             model=_get_model_name(),
             messages=messages,
             temperature=0.7,
-            max_tokens=32768,
+            max_tokens=16384,
             stream=True,
         )
         for chunk in stream:
