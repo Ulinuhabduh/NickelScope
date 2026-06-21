@@ -192,7 +192,7 @@ def _fig_to_image(fig, width=16*cm, height=10*cm):
 
 def _to_hex(color):
     """Convert HexColor to '#rrggbb' string for matplotlib."""
-    return f'#{color.red():02x}{color.green():02x}{color.blue():02x}'
+    return f'#{int(color.red*255):02x}{int(color.green*255):02x}{int(color.blue*255):02x}'
 
 
 def _style_ax(ax, title=None):
