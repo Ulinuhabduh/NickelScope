@@ -4,6 +4,19 @@ from openai import OpenAI
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 _client = None
+_current_model = "openai/gpt-oss-120b:free"
+
+MODELS = {
+    "gpt-oss-120b": "openai/gpt-oss-120b:free",
+    "nemotron-3-super": "nvidia/nemotron-3-super-120b-a12b:free",
+}
+
+
+def _switch_model(model_key):
+    global _client, _current_model
+    if model_key in MODELS:
+        _current_model = MODELS[model_key]
+        _client = None
 
 
 def _get_client():
@@ -14,11 +27,35 @@ def _get_client():
 
 
 def _get_model_name():
-    return "openai/gpt-oss-120b:free"
+    return _current_model
 
 
-SYSTEM_PROMPT = """You are NickelScope Assistant for nickel laterite prospectivity in Indonesia.
-Use context data for specific answers. Be concise, educational. Use markdown."""
+SYSTEM_PROMPT = """You are NickelScope Assistant, an expert AI geologist specializing in nickel laterite prospectivity analysis in Indonesia.
+
+Your expertise covers:
+- Nickel laterite formation processes (weathering of ultramafic/ophiolite rocks)
+- Spectral remote sensing for mineral exploration (Sentinel-2 band ratios)
+- DEM-based terrain analysis (slope, curvature, TWI) for laterite distribution
+- Indonesian geology, particularly ophiolite belts and ultramafic complexes
+- Prospectivity modeling and uncertainty interpretation
+
+Key knowledge:
+- Iron oxide ratio (B4/B2) indicates lateritic weathering intensity
+- Ferrous ratio (B11/B8) detects mafic/ultramafic mineralogy
+- Clay ratio (B11/B12) identifies clay-rich weathered zones
+- NDVI helps distinguish vegetation cover from exposed laterite
+- High TWI values suggest zones of accumulation favorable for laterization
+- Nickel laterite forms primarily on serpentinized peridotite and dunite
+- Major nickel belts in Indonesia: Pomalaa-Kolaka (Southeast Sulawesi), Buli (North Maluku), Gag Island (Raja Ampat), Weda (Central Halmahera)
+
+Response guidelines:
+- Be concise but technically precise
+- Use bullet points for lists
+- Reference specific band ratios or terrain metrics when explaining
+- When prospectivity probability is high (>0.5), emphasize the geological significance
+- When uncertainty is high, explain what additional data would reduce it
+- Always relate findings to nickel laterite exploration potential
+- Use markdown formatting for clarity"""
 
 
 def build_context(state) -> str:

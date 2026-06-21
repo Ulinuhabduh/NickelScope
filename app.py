@@ -44,7 +44,7 @@ from nickelscope.geology import (
 )
 from nickelscope.gee import init_gee, build_gee_features, get_geology_from_local, _make_grid
 from nickelscope.ml import load_model, predict_grid, FEATS
-from nickelscope.chat import get_initial_message, stream_response, get_full_response
+from nickelscope.chat import get_initial_message, stream_response, get_full_response, _switch_model
 from nickelscope.report import generate_report
 
 model_dict = load_model()
@@ -613,6 +613,11 @@ def main():
                 ui.label('NickelScope Assistant').classes('text-white text-sm font-bold')
                 ui.label('Powered by OpenRouter').classes('text-white/60 text-xs')
             ui.space()
+            model_select = ui.select(
+                options={'gpt-oss-120b': 'GPT OSS 120B', 'nemotron-3-super': 'Nemotron 3 Super'},
+                value='gpt-oss-120b',
+                on_change=lambda e: _switch_model(e.value),
+            ).classes('w-44').props('dense outlined standout dark color=white')
             ui.button(icon='minimize', on_click=lambda: ui.run_javascript('document.querySelector(".ns-chat-window").style.display="none"')).props('flat round dense color=white size=sm')
             ui.button(icon='close', on_click=lambda: (ui.run_javascript('document.querySelector(".ns-chat-window").style.display="none"'), ui.run_javascript('document.querySelectorAll("[class*=\'fixed bottom-6 right-6\']")[0].style.display=\'flex\''))).props('flat round dense color=white size=sm')
 
