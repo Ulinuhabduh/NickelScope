@@ -190,16 +190,21 @@ def _fig_to_image(fig, width=16*cm, height=10*cm):
     return Image(buf, width=width, height=height)
 
 
+def _to_hex(color):
+    """Convert HexColor to '#rrggbb' string for matplotlib."""
+    return f'#{color.red():02x}{color.green():02x}{color.blue():02x}'
+
+
 def _style_ax(ax, title=None):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_color(GRAY_300.hexval())
-    ax.spines['bottom'].set_color(GRAY_300.hexval())
-    ax.tick_params(colors=GRAY_700.hexval(), labelsize=8)
-    ax.set_xlabel(ax.get_xlabel(), fontsize=9, color=GRAY_700.hexval(), labelpad=8)
-    ax.set_ylabel(ax.get_ylabel(), fontsize=9, color=GRAY_700.hexval(), labelpad=8)
+    ax.spines['left'].set_color(_to_hex(GRAY_300))
+    ax.spines['bottom'].set_color(_to_hex(GRAY_300))
+    ax.tick_params(colors=_to_hex(GRAY_700), labelsize=8)
+    ax.set_xlabel(ax.get_xlabel(), fontsize=9, color=_to_hex(GRAY_700), labelpad=8)
+    ax.set_ylabel(ax.get_ylabel(), fontsize=9, color=_to_hex(GRAY_700), labelpad=8)
     if title:
-        ax.set_title(title, fontsize=11, fontweight='bold', color=NAVY.hexval(), pad=12)
+        ax.set_title(title, fontsize=11, fontweight='bold', color=_to_hex(NAVY), pad=12)
 
 
 def _make_heatmap(grid, b, n_g=80):
@@ -216,13 +221,13 @@ def _make_heatmap(grid, b, n_g=80):
     cmap = LinearSegmentedColormap.from_list('ni', colors_list, N=256)
     c = ax.pcolormesh(xi, yi, zi, cmap=cmap, shading='gouraud', vmin=0, vmax=1)
     cb = plt.colorbar(c, ax=ax, shrink=0.8, aspect=20, pad=0.02)
-    cb.set_label('Probability', fontsize=9, color=GRAY_700.hexval())
-    cb.ax.tick_params(labelsize=8, colors=GRAY_700.hexval())
+    cb.set_label('Probability', fontsize=9, color=_to_hex(GRAY_700))
+    cb.ax.tick_params(labelsize=8, colors=_to_hex(GRAY_700))
     _style_ax(ax, 'Nickel Prospectivity Heatmap')
     ax.set_xlabel('Longitude')
     ax.set_ylabel('Latitude')
     ax.set_aspect('equal')
-    ax.grid(True, alpha=0.15, color=GRAY_500.hexval(), linewidth=0.5)
+    ax.grid(True, alpha=0.15, color=_to_hex(GRAY_500), linewidth=0.5)
     fig.tight_layout()
     return _fig_to_image(fig, width=16*cm, height=9.5*cm)
 
@@ -240,11 +245,11 @@ def _make_prob_chart(grid):
     for bar, count in zip(bars, counts):
         if count > 0:
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
-                    str(count), ha='center', va='bottom', fontsize=7, color=GRAY_700.hexval())
+                    str(count), ha='center', va='bottom', fontsize=7, color=_to_hex(GRAY_700))
     _style_ax(ax, 'Probability Distribution')
     ax.set_xlabel('Probability')
     ax.set_ylabel('Sample Count')
-    ax.grid(axis='y', alpha=0.15, color=GRAY_500.hexval(), linewidth=0.5)
+    ax.grid(axis='y', alpha=0.15, color=_to_hex(GRAY_500), linewidth=0.5)
     fig.tight_layout()
     return _fig_to_image(fig, width=15*cm, height=7.5*cm)
 
@@ -257,7 +262,7 @@ def _make_rock_chart(grid):
     colors = [ROCK_COLORS.get(k, '#999') for k in vc.index]
     wedges, texts, autotexts = ax.pie(
         vc.values, labels=vc.index, autopct='%1.1f%%',
-        colors=colors, textprops={'fontsize': 8, 'color': GRAY_900.hexval()},
+        colors=colors, textprops={'fontsize': 8, 'color': _to_hex(GRAY_900)},
         pctdistance=0.75, startangle=90,
         wedgeprops={'edgecolor': 'white', 'linewidth': 1.5}
     )
@@ -266,7 +271,7 @@ def _make_rock_chart(grid):
         t.set_fontweight('bold')
         t.set_color('white')
     ax.set_title('Rock Type Distribution', fontsize=11, fontweight='bold',
-                 color=NAVY.hexval(), pad=10)
+                 color=_to_hex(NAVY), pad=10)
     fig.tight_layout()
     return _fig_to_image(fig, width=13*cm, height=8*cm)
 
@@ -283,11 +288,11 @@ def _make_uncertainty_chart(grid):
     for bar, count in zip(bars, counts):
         if count > 0:
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
-                    str(count), ha='center', va='bottom', fontsize=7, color=GRAY_700.hexval())
+                    str(count), ha='center', va='bottom', fontsize=7, color=_to_hex(GRAY_700))
     _style_ax(ax, 'Uncertainty Distribution')
     ax.set_xlabel('Uncertainty (std)')
     ax.set_ylabel('Sample Count')
-    ax.grid(axis='y', alpha=0.15, color=GRAY_500.hexval(), linewidth=0.5)
+    ax.grid(axis='y', alpha=0.15, color=_to_hex(GRAY_500), linewidth=0.5)
     fig.tight_layout()
     return _fig_to_image(fig, width=15*cm, height=7.5*cm)
 
