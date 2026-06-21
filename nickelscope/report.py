@@ -447,7 +447,7 @@ Country: Indonesia
 Bounding box: ({b[0]:.4f}, {b[1]:.4f}) to ({b[2]:.4f}, {b[3]:.4f})
 Center: ({(b[0]+b[2])/2:.4f}, {(b[1]+b[3])/2:.4f})"""
 
-        prompt = f"""You are a senior economic geologist specializing in Indonesian nickel laterite deposits.
+        prompt = f"""You are a SENIOR ECONOMIC GEOLOGIST and NICKEL LATERITE EXPLORATION SPECIALIST writing a formal technical report for an investment committee. Write with authority, precision, and depth. Do NOT abbreviate or summarize. Write the FULL report.
 
 === STUDY AREA DATA ===
 {location_block}
@@ -459,32 +459,48 @@ High-probability cells (>0.5): {n_high} of {n_total} ({n_high/n_total*100:.1f}%)
 Mean uncertainty: {mean_u:.3f}
 {rock_info}
 
-=== YOUR TASK ===
-Using the location data above, determine the exact geographic region of this study area.
-The geological province names tell you exactly where this is in Indonesia.
-Use your knowledge of Indonesian geology to describe the specific geological setting of that region.
+=== REPORT STRUCTURE (write ALL sections completely, minimum 200 words EACH) ===
 
-Write a professional report with these sections:
+**Section A: GEOLOGICAL ASSESSMENT** (minimum 250 words)
+Using the province names above, identify the EXACT geographic region. Then discuss ALL of the following:
+- Regional tectonic setting: which plate boundary, what type of convergence, when did it happen
+- The ophiolite belt: which specific belt (e.g. Moluccan Sulawesi Ophiolite Belt, East Sulawesi Ophiolite, etc.), its age, and emplacement mechanism
+- Ultramafic rock types present: serpentinite, peridotite, dunite, harzburgite — which ones and why they matter for Ni
+- Lateritization processes: tropical weathering profile (laterite, saprolite, bedrock), how Ni concentrates in saprolite zone, typical grades (1.5-3% Ni)
+- Structural controls: faults, shear zones that control laterite distribution
 
-Section A: GEOLOGICAL ASSESSMENT
-Identify the region from the province names above. Describe its geological setting, particularly ultramafic rocks and ophiolite complexes relevant to nickel laterite mineralization. Discuss lateritization processes specific to that region.
+**Section B: PROSPECTIVITY INTERPRETATION** (minimum 250 words)
+Interpret EVERY number:
+- What does mean probability {mean_p:.3f} mean geologically? Is the area overall prospective?
+- What does max probability {max_p:.3f} indicate? Where would that cell likely be located?
+- What does the percentage of high-risk cells ({n_high/n_total*100:.1f}%) tell us about areal extent of mineralization?
+- Compare these values to known nickel districts in Indonesia (e.g. Pomalaa, Wawonii, Gag Island, Weda Bay)
+- Discuss what geological factors drive the probability up or down in this specific area
 
-Section B: PROSPECTIVITY INTERPRETATION
-Interpret the probability values in the context of nickel exploration potential.
+**Section C: RISK AND UNCERTAINTY** (minimum 200 words)
+Discuss ALL of the following risks:
+- Data limitations: resolution of Sentinel-2 (10m), DEM artifacts, geology shapefile scale
+- Model limitations: training data bias, class imbalance, spatial autocorrelation
+- Geological risks: deep laterite cover, vegetation masking, artisanal mining disturbance
+- Uncertainty of {mean_u:.3f}: what does this level of uncertainty mean for exploration confidence?
+- What additional data would most reduce uncertainty?
 
-Section C: RISK AND UNCERTAINTY
-Discuss data limitations and uncertainty implications.
+**Section D: RECOMMENDATIONS** (minimum 200 words)
+Provide 5 SPECIFIC, ACTIONABLE recommendations with EXACT details:
+1. What specific survey to conduct, at what scale, with what equipment
+2. Where exactly to focus (reference probability values and rock types)
+3. What timeline and budget range would be appropriate
+4. What decision criteria should trigger the next phase
+5. What permitting and environmental requirements to consider
 
-Section D: RECOMMENDATIONS
-List 4-5 specific exploration recommendations.
-
-Use Tabel if you can. NO special symbols. Bold labels only. No Maximum total words"""
+Write the COMPLETE report. Do NOT stop early. Do NOT skip sections. Each section must have substantial, detailed paragraphs. Use bold labels for section headers. Write in formal technical English."""
 
         response = client.chat.completions.create(
             model=_get_model_name(),
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.6,
-            max_tokens=16384, 
+            temperature=0.7,
+            max_tokens=16384,
+            top_p=0.9,
         )
         return _clean_ai_text(response.choices[0].message.content)
     except Exception:
