@@ -478,7 +478,7 @@ Discuss data limitations and uncertainty implications.
 Section D: RECOMMENDATIONS
 List 4-5 specific exploration recommendations.
 
-Use plain text only (NO tables, NO markdown pipes, NO special symbols). Bold labels only. 800-1000 words total."""
+Use Tabel if you can. NO special symbols. Bold labels only. No Maximum total words"""
 
         response = client.chat.completions.create(
             model=_get_model_name(),
