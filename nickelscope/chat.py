@@ -93,11 +93,6 @@ def get_initial_message() -> str:
     """Welcome message for the chatbot."""
     return (
         "Hello! I'm **NickelScope Assistant**, your AI guide for nickel laterite prospectivity analysis.\n\n"
-        "I can help you:\n"
-        "- Interpret prospectivity results\n"
-        "- Explain spectral indices and terrain features\n"
-        "- Understand rock types and their significance\n"
-        "- Answer questions about nickel laterite geology\n\n"
         "Draw a rectangle on the map and click **Process Area** to get started, then ask me anything!"
     )
 

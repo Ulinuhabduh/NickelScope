@@ -561,6 +561,8 @@ def main():
         .ns-chat-msg th, .ns-chat-msg td { border: 1px solid #ddd !important; padding: 4px 8px !important; white-space: normal !important; word-wrap: break-word !important; overflow-wrap: break-word !important; }
         .ns-chat-input { background: white; border: 2px solid #E8EAF6; border-radius: 24px !important; transition: border-color 0.2s; }
         .ns-chat-input:focus-within { border-color: #1565C0 !important; box-shadow: 0 0 0 3px rgba(21,101,192,0.1); }
+        .ns-model-chip { background: white !important; color: #333 !important; border: 1px solid #ddd !important; border-radius: 12px !important; font-size: 10px !important; padding: 2px 8px !important; min-height: 20px !important; text-transform: none !important; }
+        .ns-model-active { background: #2196F3 !important; color: white !important; border-color: #2196F3 !important; }
         .ns-chat-chip { background: white; border: 1px solid #E3F2FD; border-radius: 14px !important; font-size: 10px !important; color: #1565C0 !important; padding: 2px 8px !important; min-height: 20px !important; transition: all 0.2s; }
         .ns-chat-chip:hover { background: #E3F2FD !important; border-color: #1565C0 !important; transform: translateY(-1px); }
         .ns-typing-dot { animation: ns-bounce 1.4s infinite ease-in-out both; }
@@ -576,6 +578,7 @@ def main():
             if (!win || !header) return;
             var offsetX = 0, offsetY = 0, isDragging = false;
             header.addEventListener('mousedown', function(e) {
+                if (e.target.closest('.q-field') || e.target.closest('.q-select') || e.target.closest('.q-menu')) return;
                 isDragging = true;
                 offsetX = e.clientX - win.getBoundingClientRect().left;
                 offsetY = e.clientY - win.getBoundingClientRect().top;
@@ -589,6 +592,20 @@ def main():
                 win.style.bottom = 'auto';
             });
             document.addEventListener('mouseup', function() { isDragging = false; });
+
+            document.addEventListener('click', function(e) {
+                var field = e.target.closest('.q-field');
+                if (field && win.contains(field)) {
+                    setTimeout(function() {
+                        var menus = document.querySelectorAll('.q-menu');
+                        menus.forEach(function(menu) {
+                            if (menu.parentElement !== document.body) {
+                                document.body.appendChild(menu);
+                            }
+                        });
+                    }, 100);
+                }
+            }, true);
         }, 500);
     });
     </script>
@@ -597,7 +614,7 @@ def main():
 
     # ── Floating Chat Window ──
     chat_window = ui.element('div').classes('ns-chat-window').style('''
-        position: fixed; bottom: 80px; right: 24px; width: 400px; height: 520px;
+        position: fixed; bottom: 80px; right: 24px; width: 550px; height: 600px;
         min-width: 320px; min-height: 300px; max-width: 90vw; max-height: 90vh;
         background: white; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.25);
         display: none; flex-direction: column; z-index: 9999; overflow: hidden;
@@ -613,11 +630,6 @@ def main():
                 ui.label('NickelScope Assistant').classes('text-white text-sm font-bold')
                 ui.label('Powered by OpenRouter').classes('text-white/60 text-xs')
             ui.space()
-            model_select = ui.select(
-                options={'gpt-oss-120b': 'GPT OSS 120B', 'nemotron-3-super': 'Nemotron 3 Super'},
-                value='gpt-oss-120b',
-                on_change=lambda e: _switch_model(e.value),
-            ).classes('w-44').props('dense outlined standout dark color=white')
             ui.button(icon='minimize', on_click=lambda: ui.run_javascript('document.querySelector(".ns-chat-window").style.display="none"')).props('flat round dense color=white size=sm')
             ui.button(icon='close', on_click=lambda: (ui.run_javascript('document.querySelector(".ns-chat-window").style.display="none"'), ui.run_javascript('document.querySelectorAll("[class*=\'fixed bottom-6 right-6\']")[0].style.display=\'flex\''))).props('flat round dense color=white size=sm')
 
@@ -630,6 +642,23 @@ def main():
 
         # ── Suggestion Chips ──
         with ui.row().classes('w-full gap-1 px-3 py-1 flex-wrap justify-center items-center').style('border-top: 1px solid #F0F0F0; background: #FAFBFC;'):
+            ui.label('Model:').classes('text-xs text-gray-500 mr-1')
+            _active_style = 'background: #2196F3 !important; color: white !important; border: 1px solid #2196F3 !important; border-radius: 12px !important; font-size: 10px !important; padding: 2px 8px !important; min-height: 20px !important; text-transform: none !important;'
+            _inactive_style = 'background: white !important; color: #333 !important; border: 1px solid #ddd !important; border-radius: 12px !important; font-size: 10px !important; padding: 2px 8px !important; min-height: 20px !important; text-transform: none !important;'
+
+            gpt_chip = ui.button('GPT OSS 120B').classes('q-btn--flat q-btn--no-cap').props('flat no-caps').style(_active_style)
+            nemotron_chip = ui.button('Nemotron 3 Super').classes('q-btn--flat q-btn--no-cap').props('flat no-caps').style(_inactive_style)
+
+            def _make_model_handler(key, chip):
+                def handler():
+                    _switch_model(key)
+                    gpt_chip.style(_active_style if key == 'gpt-oss-120b' else _inactive_style)
+                    nemotron_chip.style(_active_style if key == 'nemotron-3-super' else _inactive_style)
+                return handler
+            gpt_chip.on_click(_make_model_handler('gpt-oss-120b', gpt_chip))
+            nemotron_chip.on_click(_make_model_handler('nemotron-3-super', nemotron_chip))
+
+            ui.label('|').classes('text-gray-300 mx-1')
             ui.label('Quick:').classes('text-xs text-gray-400 mr-1')
             for chip in ['Iron oxide?', 'Prospective rocks?', 'TWI?']:
                 def _make_chip_handler(text):
