@@ -3,7 +3,7 @@ NickelScope v3 — NiceGUI Edition
 Run: python app.py
 """
 import warnings; warnings.filterwarnings("ignore")
-import os
+import os, asyncio
 try:
     import certifi
     os.environ["SSL_CERT_FILE"] = certifi.where()
@@ -454,9 +454,10 @@ def main():
         geojson_bytes = json.dumps(geojson, indent=2).encode('utf-8')
         ui.download(geojson_bytes, 'nickelscope_results.geojson', media_type='application/json')
 
-    def export_pdf(grid, b):
+    async def export_pdf(grid, b):
         try:
-            pdf_bytes = generate_report(grid, b, geo_loaded=state.geo_loaded)
+            ui.notify('Generating PDF report...', type='info')
+            pdf_bytes = await asyncio.to_thread(generate_report, grid, b, state.geo_loaded)
             ui.download(pdf_bytes, 'nickelscope_report.pdf', media_type='application/pdf')
         except Exception as e:
             ui.notify(f'PDF error: {e}', type='negative')

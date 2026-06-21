@@ -1,59 +1,210 @@
-"""NickelScope PDF Report Generator — Multi-page professional report."""
-import io, os
+"""NickelScope PDF Report Generator — Clean & Professional Design."""
+import io, os, re
 from datetime import datetime
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.backends.backend_agg import FigureCanvasAgg
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm, cm
-from reportlab.lib.colors import HexColor, white, black
+from reportlab.lib.colors import HexColor, white, black, Color
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle,
-    PageBreak, KeepTogether
+    PageBreak, KeepTogether, Flowable
 )
 from reportlab.platypus.flowables import HRFlowable
+from reportlab.graphics.shapes import Drawing, Rect, String, Line
+from reportlab.graphics import renderPDF
 
 W, H = A4
-PRIMARY = HexColor('#1565C0')
-PRIMARY_DARK = HexColor('#0D47A1')
-LIGHT_BG = HexColor('#F5F7FA')
-ACCENT = HexColor('#FF9800')
 
+# ── Color Palette ──
+NAVY      = HexColor('#0B1D3A')
+BLUE      = HexColor('#1565C0')
+BLUE_LT   = HexColor('#E3F2FD')
+BLUE_MED  = HexColor('#42A5F5')
+TEAL      = HexColor('#00897B')
+TEAL_LT   = HexColor('#E0F2F1')
+AMBER     = HexColor('#FF8F00')
+AMBER_LT  = HexColor('#FFF8E1')
+RED       = HexColor('#C62828')
+RED_LT    = HexColor('#FFEBEE')
+GRAY_900  = HexColor('#212121')
+GRAY_700  = HexColor('#616161')
+GRAY_500  = HexColor('#9E9E9E')
+GRAY_300  = HexColor('#E0E0E0')
+GRAY_100  = HexColor('#F5F5F5')
+BG_CREAM  = HexColor('#FAFBFC')
+
+
+# ══════════════════════════════════════════════════════════════
+#  Custom Flowables
+# ══════════════════════════════════════════════════════════════
+
+class SectionHeader(Flowable):
+    """Styled section header with colored left bar."""
+    def __init__(self, number, title, width=170*mm, height=14*mm):
+        Flowable.__init__(self)
+        self.number = number
+        self.title = title
+        self.width = width
+        self.height = height
+
+    def draw(self):
+        c = self.canv
+        # Background bar
+        c.setFillColor(BLUE_LT)
+        c.roundRect(0, 0, self.width, self.height, 3, fill=1, stroke=0)
+        # Left accent bar
+        c.setFillColor(BLUE)
+        c.roundRect(0, 0, 5, self.height, 2, fill=1, stroke=0)
+        # Number circle
+        c.setFillColor(BLUE)
+        c.circle(18, self.height / 2, 8, fill=1, stroke=0)
+        c.setFillColor(white)
+        c.setFont('Helvetica-Bold', 10)
+        c.drawCentredString(18, self.height / 2 - 3.5, str(self.number))
+        # Title text
+        c.setFillColor(NAVY)
+        c.setFont('Helvetica-Bold', 13)
+        c.drawString(34, self.height / 2 - 4, self.title)
+
+
+class CoverBlock(Flowable):
+    """Full-width cover page block."""
+    def __init__(self, width=170*mm, height=260*mm):
+        Flowable.__init__(self)
+        self.width = width
+        self.height = height
+
+    def draw(self):
+        c = self.canv
+        # Top accent bar
+        c.setFillColor(BLUE)
+        c.rect(0, self.height - 8, self.width, 8, fill=1, stroke=0)
+        # Thin amber line
+        c.setFillColor(AMBER)
+        c.rect(0, self.height - 11, self.width, 3, fill=1, stroke=0)
+
+
+class KeyMetricBox(Flowable):
+    """Highlighted metric card for the summary table area."""
+    def __init__(self, label, value, color=BLUE, width=50*mm, height=18*mm):
+        Flowable.__init__(self)
+        self.label = label
+        self.value = value
+        self.color = color
+        self.width = width
+        self.height = height
+
+    def draw(self):
+        c = self.canv
+        # Card background
+        c.setFillColor(GRAY_100)
+        c.roundRect(0, 0, self.width, self.height, 4, fill=1, stroke=0)
+        # Top accent
+        c.setFillColor(self.color)
+        c.rect(0, self.height - 3, self.width, 3, fill=1, stroke=0)
+        # Value
+        c.setFillColor(NAVY)
+        c.setFont('Helvetica-Bold', 16)
+        c.drawCentredString(self.width / 2, self.height / 2, self.value)
+        # Label
+        c.setFillColor(GRAY_700)
+        c.setFont('Helvetica', 7)
+        c.drawCentredString(self.width / 2, 3, self.label)
+
+
+class Footer(Flowable):
+    """Page footer with logo and page number."""
+    def __init__(self, page_num, width=170*mm, height=10*mm):
+        Flowable.__init__(self)
+        self.page_num = page_num
+        self.width = width
+        self.height = height
+
+    def draw(self):
+        c = self.canv
+        # Top line
+        c.setStrokeColor(GRAY_300)
+        c.setLineWidth(0.5)
+        c.line(0, self.height, self.width, self.height)
+        # Left: branding
+        c.setFillColor(GRAY_500)
+        c.setFont('Helvetica', 7)
+        c.drawString(0, 3, 'NickelScope v3  |  ANTAM Hackathon 2026')
+        # Right: page number
+        c.setFillColor(GRAY_700)
+        c.setFont('Helvetica', 7)
+        c.drawRightString(self.width, 3, f'Page {self.page_num}')
+
+
+# ══════════════════════════════════════════════════════════════
+#  Styles
+# ══════════════════════════════════════════════════════════════
 
 def _styles():
     ss = getSampleStyleSheet()
-    ss.add(ParagraphStyle('CoverTitle', parent=ss['Title'], fontSize=28, textColor=PRIMARY_DARK,
-                          spaceAfter=6, alignment=TA_CENTER, fontName='Helvetica-Bold'))
-    ss.add(ParagraphStyle('CoverSub', parent=ss['Normal'], fontSize=14, textColor=PRIMARY,
-                          alignment=TA_CENTER, spaceAfter=4))
-    ss.add(ParagraphStyle('SectionTitle', parent=ss['Heading1'], fontSize=16, textColor=PRIMARY_DARK,
-                          spaceBefore=12, spaceAfter=8, fontName='Helvetica-Bold'))
-    ss.add(ParagraphStyle('SubTitle', parent=ss['Heading2'], fontSize=12, textColor=PRIMARY,
-                          spaceBefore=8, spaceAfter=4, fontName='Helvetica-Bold'))
-    ss.add(ParagraphStyle('BodyText2', parent=ss['Normal'], fontSize=10, leading=14,
-                          alignment=TA_JUSTIFY, spaceAfter=6))
-    ss.add(ParagraphStyle('SmallText', parent=ss['Normal'], fontSize=8, textColor=HexColor('#666666')))
-    ss.add(ParagraphStyle('Highlight', parent=ss['Normal'], fontSize=10, textColor=HexColor('#C62828'),
+    ss.add(ParagraphStyle('CoverTitle', parent=ss['Title'], fontSize=32, textColor=NAVY,
+                          spaceAfter=4, alignment=TA_LEFT, fontName='Helvetica-Bold',
+                          leading=38))
+    ss.add(ParagraphStyle('CoverSub', parent=ss['Normal'], fontSize=13, textColor=BLUE,
+                          alignment=TA_LEFT, spaceAfter=2, fontName='Helvetica'))
+    ss.add(ParagraphStyle('SectionTitle', parent=ss['Heading1'], fontSize=14, textColor=NAVY,
+                          spaceBefore=10, spaceAfter=6, fontName='Helvetica-Bold'))
+    ss.add(ParagraphStyle('SubTitle', parent=ss['Heading2'], fontSize=11, textColor=BLUE,
+                          spaceBefore=6, spaceAfter=3, fontName='Helvetica-Bold'))
+    ss.add(ParagraphStyle('Body', parent=ss['Normal'], fontSize=9.5, leading=13.5,
+                          alignment=TA_JUSTIFY, spaceAfter=5, textColor=GRAY_900))
+    ss.add(ParagraphStyle('BodySmall', parent=ss['Normal'], fontSize=8.5, leading=11,
+                          alignment=TA_JUSTIFY, spaceAfter=4, textColor=GRAY_700))
+    ss.add(ParagraphStyle('Caption', parent=ss['Normal'], fontSize=7.5, textColor=GRAY_500,
+                          alignment=TA_CENTER, spaceAfter=6, fontName='Helvetica-Oblique'))
+    ss.add(ParagraphStyle('Callout', parent=ss['Normal'], fontSize=9, leading=12,
+                          textColor=RED, fontName='Helvetica-Bold', spaceAfter=4))
+    ss.add(ParagraphStyle('MetricLabel', parent=ss['Normal'], fontSize=7.5, textColor=GRAY_500,
+                          fontName='Helvetica'))
+    ss.add(ParagraphStyle('MetricValue', parent=ss['Normal'], fontSize=14, textColor=NAVY,
                           fontName='Helvetica-Bold'))
+    ss.add(ParagraphStyle('TableCell', parent=ss['Normal'], fontSize=8.5, leading=11,
+                          textColor=GRAY_900))
+    ss.add(ParagraphStyle('TableHeader', parent=ss['Normal'], fontSize=8.5, leading=11,
+                          textColor=white, fontName='Helvetica-Bold'))
+    ss.add(ParagraphStyle('SmallNote', parent=ss['Normal'], fontSize=7, textColor=GRAY_500,
+                          fontName='Helvetica-Oblique'))
     return ss
 
 
+# ══════════════════════════════════════════════════════════════
+#  Chart Helpers
+# ══════════════════════════════════════════════════════════════
+
 def _fig_to_image(fig, width=16*cm, height=10*cm):
     buf = io.BytesIO()
-    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight', facecolor='white')
+    fig.savefig(buf, format='png', dpi=200, bbox_inches='tight', facecolor='white')
     plt.close(fig)
     buf.seek(0)
-    img = Image(buf, width=width, height=height)
-    return img
+    return Image(buf, width=width, height=height)
+
+
+def _style_ax(ax, title=None):
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color(GRAY_300.hexval())
+    ax.spines['bottom'].set_color(GRAY_300.hexval())
+    ax.tick_params(colors=GRAY_700.hexval(), labelsize=8)
+    ax.set_xlabel(ax.get_xlabel(), fontsize=9, color=GRAY_700.hexval(), labelpad=8)
+    ax.set_ylabel(ax.get_ylabel(), fontsize=9, color=GRAY_700.hexval(), labelpad=8)
+    if title:
+        ax.set_title(title, fontsize=11, fontweight='bold', color=NAVY.hexval(), pad=12)
 
 
 def _make_heatmap(grid, b, n_g=80):
     fig, ax = plt.subplots(figsize=(8, 5))
+    fig.patch.set_facecolor('white')
     xi = np.linspace(b[0], b[2], n_g)
     yi = np.linspace(b[1], b[3], n_g)
     xi, yi = np.meshgrid(xi, yi)
@@ -64,62 +215,88 @@ def _make_heatmap(grid, b, n_g=80):
                    '#FFD54F', '#FFC107', '#FF9800', '#F44336', '#B71C1C']
     cmap = LinearSegmentedColormap.from_list('ni', colors_list, N=256)
     c = ax.pcolormesh(xi, yi, zi, cmap=cmap, shading='gouraud', vmin=0, vmax=1)
-    plt.colorbar(c, ax=ax, label='Probability', shrink=0.8)
-    ax.set_title('Nickel Prospectivity Heatmap', fontsize=12, fontweight='bold')
+    cb = plt.colorbar(c, ax=ax, shrink=0.8, aspect=20, pad=0.02)
+    cb.set_label('Probability', fontsize=9, color=GRAY_700.hexval())
+    cb.ax.tick_params(labelsize=8, colors=GRAY_700.hexval())
+    _style_ax(ax, 'Nickel Prospectivity Heatmap')
     ax.set_xlabel('Longitude')
     ax.set_ylabel('Latitude')
     ax.set_aspect('equal')
+    ax.grid(True, alpha=0.15, color=GRAY_500.hexval(), linewidth=0.5)
     fig.tight_layout()
-    return _fig_to_image(fig, width=16*cm, height=10*cm)
+    return _fig_to_image(fig, width=16*cm, height=9.5*cm)
 
 
 def _make_prob_chart(grid):
-    fig, ax = plt.subplots(figsize=(6, 3.5))
-    bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    fig, ax = plt.subplots(figsize=(6, 3.2))
+    fig.patch.set_facecolor('white')
+    bins = np.arange(0, 1.05, 0.1)
     counts = [int(((grid.probability >= bins[i]) & (grid.probability < bins[i + 1])).sum())
               for i in range(len(bins) - 1)]
     labels = [f'{bins[i]:.1f}' for i in range(len(bins) - 1)]
     colors = ['#1565C0', '#1976D2', '#1E88E5', '#2196F3', '#42A5F5',
               '#FFA726', '#FF9800', '#FB8C00', '#F57C00', '#EF6C00']
-    ax.bar(labels, counts, color=colors)
-    ax.set_title('Probability Distribution', fontsize=11, fontweight='bold')
+    bars = ax.bar(labels, counts, color=colors, edgecolor='white', linewidth=0.5, width=0.8)
+    for bar, count in zip(bars, counts):
+        if count > 0:
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
+                    str(count), ha='center', va='bottom', fontsize=7, color=GRAY_700.hexval())
+    _style_ax(ax, 'Probability Distribution')
     ax.set_xlabel('Probability')
     ax.set_ylabel('Sample Count')
-    ax.tick_params(labelsize=8)
+    ax.grid(axis='y', alpha=0.15, color=GRAY_500.hexval(), linewidth=0.5)
     fig.tight_layout()
-    return _fig_to_image(fig, width=14*cm, height=8*cm)
+    return _fig_to_image(fig, width=15*cm, height=7.5*cm)
 
 
 def _make_rock_chart(grid):
     from nickelscope.geology import ROCK_COLORS
-    fig, ax = plt.subplots(figsize=(6, 3.5))
+    fig, ax = plt.subplots(figsize=(5, 3.5))
+    fig.patch.set_facecolor('white')
     vc = grid.rock_type.value_counts()
     colors = [ROCK_COLORS.get(k, '#999') for k in vc.index]
-    wedges, texts, autotexts = ax.pie(vc.values, labels=vc.index, autopct='%1.1f%%',
-                                       colors=colors, textprops={'fontsize': 8})
+    wedges, texts, autotexts = ax.pie(
+        vc.values, labels=vc.index, autopct='%1.1f%%',
+        colors=colors, textprops={'fontsize': 8, 'color': GRAY_900.hexval()},
+        pctdistance=0.75, startangle=90,
+        wedgeprops={'edgecolor': 'white', 'linewidth': 1.5}
+    )
     for t in autotexts:
         t.set_fontsize(7)
-    ax.set_title('Rock Type Distribution', fontsize=11, fontweight='bold')
+        t.set_fontweight('bold')
+        t.set_color('white')
+    ax.set_title('Rock Type Distribution', fontsize=11, fontweight='bold',
+                 color=NAVY.hexval(), pad=10)
     fig.tight_layout()
-    return _fig_to_image(fig, width=14*cm, height=8*cm)
+    return _fig_to_image(fig, width=13*cm, height=8*cm)
 
 
 def _make_uncertainty_chart(grid):
-    fig, ax = plt.subplots(figsize=(6, 3.5))
+    fig, ax = plt.subplots(figsize=(6, 3.2))
+    fig.patch.set_facecolor('white')
     u = grid.uncertainty.values
     bins = np.linspace(0, max(u.max(), 0.01), 11)
     counts = [int(((u >= bins[i]) & (u < bins[i + 1])).sum()) for i in range(len(bins) - 1)]
     labels = [f'{bins[i]:.2f}' for i in range(len(bins) - 1)]
-    ax.bar(labels, counts, color='#7B1FA2')
-    ax.set_title('Uncertainty Distribution', fontsize=11, fontweight='bold')
+    colors = ['#7B1FA2' if float(l) <= 0.15 else '#E91E63' for l in labels]
+    bars = ax.bar(labels, counts, color=colors, edgecolor='white', linewidth=0.5, width=0.8)
+    for bar, count in zip(bars, counts):
+        if count > 0:
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                    str(count), ha='center', va='bottom', fontsize=7, color=GRAY_700.hexval())
+    _style_ax(ax, 'Uncertainty Distribution')
     ax.set_xlabel('Uncertainty (std)')
     ax.set_ylabel('Sample Count')
-    ax.tick_params(labelsize=7, rotation=45)
+    ax.grid(axis='y', alpha=0.15, color=GRAY_500.hexval(), linewidth=0.5)
     fig.tight_layout()
-    return _fig_to_image(fig, width=14*cm, height=8*cm)
+    return _fig_to_image(fig, width=15*cm, height=7.5*cm)
 
 
-def _build_summary_table(grid, b):
+# ══════════════════════════════════════════════════════════════
+#  Table Builders
+# ══════════════════════════════════════════════════════════════
+
+def _build_summary_table(grid, b, styles):
     area_km = (b[2] - b[0]) * 111 * abs(np.cos(np.radians(b[1]))) * (b[3] - b[1]) * 111
     mean_p = grid.probability.mean()
     max_p = grid.probability.max()
@@ -127,41 +304,98 @@ def _build_summary_table(grid, b):
     n_total = len(grid)
     mean_u = grid.uncertainty.mean() if 'uncertainty' in grid.columns else 0
 
-    data = [
-        ['Parameter', 'Value'],
-        ['Area', f'{area_km:.1f} km\u00B2'],
-        ['Coordinates', f'({b[0]:.4f}, {b[1]:.4f}) to ({b[2]:.4f}, {b[3]:.4f})'],
-        ['Total Sample Points', str(n_total)],
-        ['Mean Probability', f'{mean_p:.3f}'],
-        ['Max Probability', f'{max_p:.3f}'],
-        ['High-Risk Points (\u22650.5)', str(n_high)],
-        ['High-Risk Percentage', f'{n_high/n_total*100:.1f}%'],
-        ['Mean Uncertainty', f'{mean_u:.3f}'],
+    rows = [
+        [Paragraph('Parameter', styles['TableHeader']),
+         Paragraph('Value', styles['TableHeader'])],
+        [Paragraph('Study Area', styles['TableCell']),
+         Paragraph(f'{area_km:.1f} km\u00B2', styles['TableCell'])],
+        [Paragraph('Coordinates', styles['TableCell']),
+         Paragraph(f'({b[0]:.4f}, {b[1]:.4f}) to ({b[2]:.4f}, {b[3]:.4f})', styles['TableCell'])],
+        [Paragraph('Total Sample Points', styles['TableCell']),
+         Paragraph(f'{n_total}', styles['TableCell'])],
+        [Paragraph('Mean Probability', styles['TableCell']),
+         Paragraph(f'{mean_p:.3f}', styles['TableCell'])],
+        [Paragraph('Max Probability', styles['TableCell']),
+         Paragraph(f'{max_p:.3f}', styles['TableCell'])],
+        [Paragraph('High-Risk Points (\u22650.5)', styles['TableCell']),
+         Paragraph(f'{n_high} ({n_high/n_total*100:.1f}%)', styles['TableCell'])],
+        [Paragraph('Mean Uncertainty', styles['TableCell']),
+         Paragraph(f'{mean_u:.3f}', styles['TableCell'])],
     ]
 
     if 'rock_type' in grid.columns:
         rock_dist = grid.rock_type.value_counts()
         for rock, count in rock_dist.items():
-            data.append([f'Rock: {rock}', f'{count} ({count/n_total*100:.1f}%)'])
+            rows.append([Paragraph(f'Rock: {rock}', styles['TableCell']),
+                         Paragraph(f'{count} ({count/n_total*100:.1f}%)', styles['TableCell'])])
 
-    t = Table(data, colWidths=[8*cm, 8*cm])
+    t = Table(rows, colWidths=[8*cm, 8*cm])
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
+        ('BACKGROUND', (0, 0), (-1, 0), BLUE),
         ('TEXTCOLOR', (0, 0), (-1, 0), white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#CCCCCC')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('GRID', (0, 0), (-1, -1), 0.4, GRAY_300),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, GRAY_100]),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('ROUNDEDCORNERS', [3, 3, 3, 3]),
     ]))
     return t
 
 
+def _build_rock_table(grid, styles):
+    from nickelscope.geology import ROCK_COLORS
+    rock_counts = grid.rock_type.value_counts()
+    rows = [
+        [Paragraph('Rock Type', styles['TableHeader']),
+         Paragraph('Count', styles['TableHeader']),
+         Paragraph('Percentage', styles['TableHeader']),
+         Paragraph('Prospectivity', styles['TableHeader'])],
+    ]
+    for rock, count in rock_counts.items():
+        pct = count / len(grid) * 100
+        if rock == 'ULTRAMAFIC':
+            prospect = 'PRIMARY HOST'
+        elif rock == 'MAFIC':
+            prospect = 'Secondary Host'
+        elif rock in ('FELSIC', 'SEDIMENTARY'):
+            prospect = 'Not Prospective'
+        else:
+            prospect = 'Variable'
+        rows.append([
+            Paragraph(f'<font color="{ROCK_COLORS.get(rock, "#999")}">\u25CF</font>  {rock}', styles['TableCell']),
+            Paragraph(str(count), styles['TableCell']),
+            Paragraph(f'{pct:.1f}%', styles['TableCell']),
+            Paragraph(prospect, styles['TableCell']),
+        ])
+
+    t = Table(rows, colWidths=[5*cm, 2.5*cm, 3*cm, 4*cm])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), BLUE),
+        ('TEXTCOLOR', (0, 0), (-1, 0), white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (1, 0), (2, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.4, GRAY_300),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, GRAY_100]),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    return t
+
+
+# ══════════════════════════════════════════════════════════════
+#  AI Interpretation
+# ══════════════════════════════════════════════════════════════
+
 def _clean_ai_text(text):
-    """Clean AI-generated text for PDF rendering with ReportLab."""
-    import re
     text = re.sub(r'\|[^\n]*\|', '', text)
     text = re.sub(r'\|[-:]+\|', '', text)
     text = re.sub(r'^\s*\|', '', text, flags=re.MULTILINE)
@@ -177,7 +411,6 @@ def _clean_ai_text(text):
 
 
 def _generate_ai_interpretation(grid, b, geo_loaded):
-    """Generate AI interpretation using Groq."""
     try:
         from nickelscope.chat import _get_client, _get_model_name
         client = _get_client()
@@ -198,7 +431,7 @@ def _generate_ai_interpretation(grid, b, geo_loaded):
 
         if geo_loaded:
             province_list = ', '.join(sorted(geo_loaded))
-            location_block = f"""LOCATION DATA (use these to identify the region):
+            location_block = f"""LOCATION DATA:
 Country: Indonesia
 Geological provinces: {province_list}
 Bounding box: ({b[0]:.4f}, {b[1]:.4f}) to ({b[2]:.4f}, {b[3]:.4f})
@@ -246,7 +479,7 @@ Use plain text only (NO tables, NO markdown pipes, NO special symbols). Bold lab
             model=_get_model_name(),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.6,
-            max_tokens=4096,
+            max_tokens=16384, 
         )
         return _clean_ai_text(response.choices[0].message.content)
     except Exception:
@@ -254,7 +487,6 @@ Use plain text only (NO tables, NO markdown pipes, NO special symbols). Bold lab
 
 
 def _template_interpretation(grid, b, geo_loaded):
-    """Fallback template-based interpretation."""
     area_km = (b[2] - b[0]) * 111 * abs(np.cos(np.radians(b[1]))) * (b[3] - b[1]) * 111
     mean_p = grid.probability.mean()
     max_p = grid.probability.max()
@@ -283,7 +515,7 @@ def _template_interpretation(grid, b, geo_loaded):
 
 Overall prospectivity level: <b>{level}</b>. Of {n_total} sample points analyzed, {n_high} ({pct:.1f}%) show probability \u2265 0.5, indicating potential nickel laterite mineralization. The maximum probability recorded is {max_p:.3f}.
 
-<b>Risk and Uncertainty</b"""
+<b>Risk and Uncertainty</b>"""
 
     mean_u = grid.uncertainty.mean()
     if mean_u > 0.15:
@@ -302,70 +534,77 @@ Overall prospectivity level: <b>{level}</b>. Of {n_total} sample points analyzed
     return text
 
 
-def generate_report(grid, b, geo_loaded=None, output_path=None):
-    """Generate multi-page PDF report."""
-    if geo_loaded is None:
-        geo_loaded = set()
+# ══════════════════════════════════════════════════════════════
+#  Page Builders
+# ══════════════════════════════════════════════════════════════
 
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm,
-                            leftMargin=2*cm, rightMargin=2*cm)
-    styles = _styles()
-    story = []
-
-    # ═══ PAGE 1: COVER ═══
-    story.append(Spacer(1, 3*cm))
-    story.append(Paragraph('NickelScope v3', styles['CoverTitle']))
-    story.append(Paragraph('Nickel Laterite Prospectivity Analysis Report', styles['CoverSub']))
-    story.append(Spacer(1, 1*cm))
-    story.append(HRFlowable(width='80%', thickness=2, color=PRIMARY))
-    story.append(Spacer(1, 1*cm))
-
+def _page_cover(story, b, geo_loaded, styles):
     area_km = (b[2] - b[0]) * 111 * abs(np.cos(np.radians(b[1]))) * (b[3] - b[1]) * 111
-    cover_data = [
+
+    story.append(CoverBlock())
+    story.append(Spacer(1, -240*mm))
+
+    story.append(Paragraph('NickelScope', styles['CoverTitle']))
+    story.append(Paragraph('v3', ParagraphStyle('CoverVer', parent=styles['CoverTitle'],
+                                                fontSize=20, textColor=BLUE, spaceAfter=8)))
+    story.append(Spacer(1, 0.3*cm))
+    story.append(HRFlowable(width='35%', thickness=2, color=AMBER))
+    story.append(Spacer(1, 0.5*cm))
+    story.append(Paragraph('Nickel Laterite Prospectivity', styles['CoverSub']))
+    story.append(Paragraph('Analysis Report', styles['CoverSub']))
+    story.append(Spacer(1, 1.5*cm))
+
+    # Info card
+    info_data = [
         ['Study Area', f'{area_km:.1f} km\u00B2'],
         ['Coordinates', f'({b[0]:.4f}, {b[1]:.4f}) to ({b[2]:.4f}, {b[3]:.4f})'],
-        ['Generated', datetime.now().strftime('%B %d, %Y %H:%M')],
         ['Model', 'Random Forest (400 trees)'],
         ['Features', '8 spectral + terrain indices'],
+        ['Generated', datetime.now().strftime('%B %d, %Y')],
     ]
     if geo_loaded:
-        cover_data.append(['Geology', ', '.join(list(geo_loaded)[:3])])
+        info_data.append(['Geology', ', '.join(list(geo_loaded)[:3])])
 
-    t = Table(cover_data, colWidths=[5*cm, 11*cm])
-    t.setStyle(TableStyle([
+    info_table = Table(info_data, colWidths=[3.5*cm, 10*cm])
+    info_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('TEXTCOLOR', (0, 0), (0, -1), PRIMARY),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('TEXTCOLOR', (0, 0), (0, -1), GRAY_500),
+        ('TEXTCOLOR', (1, 0), (1, -1), GRAY_900),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('LINEBELOW', (0, 0), (-1, -2), 0.3, GRAY_300),
     ]))
-    story.append(t)
+    story.append(info_table)
 
-    story.append(Spacer(1, 3*cm))
-    story.append(Paragraph('ANTAM Hackathon 2026', styles['CoverSub']))
-    story.append(Paragraph('AI-GIS Nickel Laterite Prospectivity Tool', styles['SmallText']))
+    story.append(Spacer(1, 4*cm))
+    story.append(Paragraph('ANTAM Hackathon 2026', ParagraphStyle(
+        'Hackathon', parent=styles['CoverSub'], fontSize=11, textColor=AMBER,
+        fontName='Helvetica-Bold')))
+    story.append(Paragraph('AI-GIS Nickel Laterite Prospectivity Tool', styles['SmallNote']))
     story.append(PageBreak())
 
-    # ═══ PAGE 2: AOI OVERVIEW ═══
-    story.append(Paragraph('1. Area of Interest (AOI) Overview', styles['SectionTitle']))
-    story.append(HRFlowable(width='100%', thickness=1, color=PRIMARY))
-    story.append(Spacer(1, 0.5*cm))
 
+def _page_aoi(story, grid, b, geo_loaded, styles):
+    area_km = (b[2] - b[0]) * 111 * abs(np.cos(np.radians(b[1]))) * (b[3] - b[1]) * 111
     lat_center = (b[1] + b[3]) / 2
     lon_center = (b[0] + b[2]) / 2
     lat_span = b[3] - b[1]
     lon_span = b[2] - b[0]
 
+    story.append(SectionHeader(1, 'Area of Interest (AOI) Overview'))
+    story.append(Spacer(1, 0.5*cm))
+
     story.append(Paragraph(
-        f'The study area covers <b>{area_km:.1f} km\u00B2</b> of terrain located in the Indonesian archipelago, '
-        f'centered at approximately <b>{lat_center:.4f}\u00B0N, {lon_center:.4f}\u00B0E</b>. '
+        f'The study area covers <b>{area_km:.1f} km\u00B2</b> of terrain in the Indonesian archipelago, '
+        f'centered at <b>{lat_center:.4f}\u00B0S, {lon_center:.4f}\u00B0E</b>. '
         f'The rectangular analysis window spans <b>{lon_span:.4f}\u00B0</b> in longitude '
         f'({b[0]:.4f}\u00B0 to {b[2]:.4f}\u00B0) and <b>{lat_span:.4f}\u00B0</b> in latitude '
         f'({b[1]:.4f}\u00B0 to {b[3]:.4f}\u00B0).',
-        styles['BodyText2']
+        styles['Body']
     ))
-    story.append(Spacer(1, 0.3*cm))
+    story.append(Spacer(1, 0.2*cm))
+
     story.append(Paragraph(
         '<b>Data Sources:</b> The analysis integrates multi-source remote sensing and geospatial data: '
         '(1) Sentinel-2 Level-2A surface reflectance imagery for spectral index computation, '
@@ -373,156 +612,140 @@ def generate_report(grid, b, geo_loaded=None, output_path=None):
         '(3) MERIT Hydro dataset for topographic wetness index. '
         'A grid of sample points was generated across the AOI and processed through a Random Forest classifier '
         'trained on known nickel laterite occurrences.',
-        styles['BodyText2']
+        styles['Body']
     ))
-    story.append(Spacer(1, 0.3*cm))
+    story.append(Spacer(1, 0.2*cm))
 
     if geo_loaded:
         story.append(Paragraph(
-            f'<b>Geological Context:</b> Geology overlay data was loaded for the following provinces: '
+            f'<b>Geological Context:</b> Geology overlay data was loaded for provinces: '
             f'<b>{", ".join(list(geo_loaded)[:5])}</b>. '
-            f'Rock formations were classified into lithological categories (ultramafic, mafic, felsic, '
-            f'sedimentary, metamorphic, igneous) to assess their potential as nickel laterite host rocks.',
-            styles['BodyText2']
+            f'Rock formations were classified into lithological categories to assess their '
+            f'potential as nickel laterite host rocks.',
+            styles['Body']
         ))
-        story.append(Spacer(1, 0.3*cm))
+        story.append(Spacer(1, 0.2*cm))
 
     story.append(Paragraph(
         '<b>Methodology:</b> The prospectivity mapping workflow involves: (a) extraction of 8 spectral and '
         'terrain features at each grid point, (b) classification of geological units from shapefile data, '
         '(c) prediction of nickel laterite probability using a trained Random Forest model with 400 decision trees, '
         'and (d) uncertainty estimation based on prediction variance across individual trees.',
-        styles['BodyText2']
+        styles['Body']
     ))
-    story.append(Spacer(1, 0.5*cm))
+    story.append(Spacer(1, 0.4*cm))
     story.append(_make_heatmap(grid, b))
-    story.append(Spacer(1, 0.3*cm))
-    story.append(Paragraph('<i>Figure 1: Nickel prospectivity heatmap of the study area. '
-                           'Red colors indicate high probability zones. Blue indicates low prospectivity areas.</i>',
-                           styles['SmallText']))
+    story.append(Paragraph(
+        'Figure 1: Nickel prospectivity heatmap. Red indicates high probability zones; '
+        'blue indicates low prospectivity areas.',
+        styles['Caption']
+    ))
     story.append(PageBreak())
 
-    # ═══ PAGE 3: PROSPECTIVITY ANALYSIS ═══
-    story.append(Paragraph('2. Prospectivity Analysis', styles['SectionTitle']))
-    story.append(HRFlowable(width='100%', thickness=1, color=PRIMARY))
+
+def _page_prospectivity(story, grid, b, styles):
+    story.append(SectionHeader(2, 'Prospectivity Analysis'))
     story.append(Spacer(1, 0.5*cm))
+
     story.append(Paragraph(
         f'The machine learning model analyzed <b>{len(grid)} sample points</b> across the study area. '
-        f'The probability distribution shows the likelihood of nickel laterite mineralization at each point.',
-        styles['BodyText2']
+        f'The probability distribution below shows the likelihood of nickel laterite mineralization '
+        f'at each point.',
+        styles['Body']
     ))
     story.append(Spacer(1, 0.3*cm))
     story.append(_make_prob_chart(grid))
-    story.append(Spacer(1, 0.3*cm))
-    story.append(Paragraph('<i>Figure 2: Distribution of prospectivity probabilities across sample points.</i>',
-                           styles['SmallText']))
+    story.append(Paragraph(
+        'Figure 2: Distribution of prospectivity probabilities across sample points.',
+        styles['Caption']
+    ))
     story.append(Spacer(1, 0.5*cm))
-    story.append(Paragraph('<b>Summary Statistics</b>', styles['SubTitle']))
-    story.append(_build_summary_table(grid, b))
+
+    story.append(Paragraph('Summary Statistics', styles['SubTitle']))
+    story.append(_build_summary_table(grid, b, styles))
     story.append(PageBreak())
 
-    # ═══ PAGE 4: GEOLOGICAL ANALYSIS ═══
-    story.append(Paragraph('3. Geological Analysis', styles['SectionTitle']))
-    story.append(HRFlowable(width='100%', thickness=1, color=PRIMARY))
+
+def _page_geology(story, grid, b, styles):
+    story.append(SectionHeader(3, 'Geological Analysis'))
     story.append(Spacer(1, 0.5*cm))
 
     if 'rock_type' in grid.columns:
-        story.append(Paragraph(
-            'The geological context of the study area was assessed using the Indonesia Geological Survey '
-            'shapefile database covering 25 provinces. Each sample point was classified based on the dominant '
-            'lithological unit at its location. Rock types were then grouped into six categories according to '
-            'their relevance as nickel laterite host rocks.',
-            styles['BodyText2']
-        ))
-        story.append(Spacer(1, 0.3*cm))
-
         rock_counts = grid.rock_type.value_counts()
         dominant_rock = rock_counts.index[0]
         dominant_pct = rock_counts.iloc[0] / len(grid) * 100
-
-        story.append(Paragraph(
-            f'The dominant lithology in the study area is <b>{dominant_rock}</b>, comprising '
-            f'<b>{dominant_pct:.1f}%</b> of the analyzed points. '
-            f'Ultramafic rocks (serpentinite, peridotite, dunite) are the primary host rocks for nickel laterite '
-            f'deposits, as they contain elevated concentrations of nickel, cobalt, and chromium that become '
-            f'concentrated during tropical weathering processes. Mafic rocks (basalt, gabbro) serve as secondary '
-            f'hosts with generally lower nickel grades.',
-            styles['BodyText2']
-        ))
-        story.append(Spacer(1, 0.3*cm))
-        story.append(_make_rock_chart(grid))
-        story.append(Spacer(1, 0.3*cm))
-        story.append(Paragraph('<i>Figure 3: Distribution of rock types within the study area. '
-                               'Ultramafic and mafic rocks have the highest prospectivity.</i>',
-                               styles['SmallText']))
-        story.append(Spacer(1, 0.5*cm))
-
-        from nickelscope.geology import ROCK_COLORS
-        rock_data = [['Rock Type', 'Count', 'Percentage', 'Prospectivity Rating']]
-        for rock, count in rock_counts.items():
-            pct = count / len(grid) * 100
-            if rock == 'ULTRAMAFIC':
-                prospect = 'PRIMARY HOST'
-            elif rock == 'MAFIC':
-                prospect = 'Secondary Host'
-            elif rock in ('FELSIC', 'SEDIMENTARY'):
-                prospect = 'Not Prospective'
-            else:
-                prospect = 'Variable'
-            rock_data.append([rock, str(count), f'{pct:.1f}%', prospect])
-
-        t = Table(rock_data, colWidths=[4*cm, 3*cm, 3*cm, 4*cm])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
-            ('TEXTCOLOR', (0, 0), (-1, 0), white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#CCCCCC')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, LIGHT_BG]),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ]))
-        story.append(t)
-        story.append(Spacer(1, 0.3*cm))
-
         n_ultra = rock_counts.get('ULTRAMAFIC', 0)
         n_mafic = rock_counts.get('MAFIC', 0)
+
+        story.append(Paragraph(
+            'The geological context was assessed using the Indonesia Geological Survey '
+            'shapefile database. Each sample point was classified based on the dominant '
+            'lithological unit at its location.',
+            styles['Body']
+        ))
+        story.append(Spacer(1, 0.2*cm))
+
+        story.append(Paragraph(
+            f'The dominant lithology is <b>{dominant_rock}</b> (<b>{dominant_pct:.1f}%</b>). '
+            f'Ultramafic rocks (serpentinite, peridotite, dunite) are the primary host rocks for nickel laterite '
+            f'deposits, containing elevated Ni, Co, and Cr that concentrate during tropical weathering. '
+            f'Mafic rocks (basalt, gabbro) serve as secondary hosts.',
+            styles['Body']
+        ))
+        story.append(Spacer(1, 0.3*cm))
+
+        story.append(_make_rock_chart(grid))
+        story.append(Paragraph(
+            'Figure 3: Rock type distribution. Ultramafic and mafic rocks have the highest prospectivity.',
+            styles['Caption']
+        ))
+        story.append(Spacer(1, 0.4*cm))
+
+        story.append(_build_rock_table(grid, styles))
+        story.append(Spacer(1, 0.4*cm))
+
         story.append(Paragraph(
             f'<b>Exploration Significance:</b> A total of <b>{n_ultra + n_mafic}</b> points '
-            f'({(n_ultra + n_mafic)/len(grid)*100:.1f}%) are located on ultramafic or mafic lithologies, '
-            f'which are the most favorable host rocks for nickel laterite mineralization. '
-            f'Of these, {n_ultra} points ({n_ultra/len(grid)*100:.1f}%) are on ultramafic units, '
+            f'({(n_ultra + n_mafic)/len(grid)*100:.1f}%) are located on ultramafic or mafic lithologies. '
+            f'Of these, {n_ultra} ({n_ultra/len(grid)*100:.1f}%) are on ultramafic units, '
             f'representing the primary exploration targets.',
-            styles['BodyText2']
+            styles['Body']
         ))
     else:
-        story.append(Paragraph('Geological data not available for this area.', styles['BodyText2']))
+        story.append(Paragraph('Geological data not available for this area.', styles['Body']))
+
     story.append(PageBreak())
 
-    # ═══ PAGE 5: UNCERTAINTY ANALYSIS ═══
-    story.append(Paragraph('4. Uncertainty Analysis', styles['SectionTitle']))
-    story.append(HRFlowable(width='100%', thickness=1, color=PRIMARY))
+
+def _page_uncertainty(story, grid, styles):
+    story.append(SectionHeader(4, 'Uncertainty Analysis'))
     story.append(Spacer(1, 0.5*cm))
+
     mean_u = grid.uncertainty.mean()
     max_u = grid.uncertainty.max()
     std_u = grid.uncertainty.std()
 
     story.append(Paragraph(
-        f'Model uncertainty was estimated as the standard deviation of probability predictions across '
-        f'400 individual decision trees in the Random Forest ensemble. This metric quantifies the model\'s '
-        f'confidence in its predictions at each sample point.',
-        styles['BodyText2']
+        'Model uncertainty was estimated as the standard deviation of probability predictions across '
+        '400 individual decision trees in the Random Forest ensemble. This metric quantifies the model\'s '
+        'confidence in its predictions at each sample point.',
+        styles['Body']
     ))
     story.append(Spacer(1, 0.3*cm))
 
-    story.append(Paragraph(
-        f'The mean uncertainty across all sample points is <b>{mean_u:.3f}</b>, with a standard deviation '
-        f'of <b>{std_u:.3f}</b> and maximum value of <b>{max_u:.3f}</b>. '
-        f'Low uncertainty values indicate areas where the model is confident in its prediction, while high '
-        f'uncertainty suggests mixed geological signals or data gaps.',
-        styles['BodyText2']
-    ))
-    story.append(Spacer(1, 0.3*cm))
+    # Key metrics boxes
+    metric_data = [[
+        KeyMetricBox('MEAN UNCERTAINTY', f'{mean_u:.3f}', BLUE),
+        KeyMetricBox('STD DEVIATION', f'{std_u:.3f}', TEAL),
+        KeyMetricBox('MAX UNCERTAINTY', f'{max_u:.3f}', AMBER),
+    ]]
+    metric_table = Table(metric_data, colWidths=[5.5*cm, 5.5*cm, 5.5*cm])
+    metric_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(metric_table)
+    story.append(Spacer(1, 0.4*cm))
 
     if mean_u > 0.15:
         story.append(Paragraph(
@@ -532,54 +755,86 @@ def generate_report(grid, b, geo_loaded=None, output_path=None):
             '(2) regions with limited ground-truth data, or '
             '(3) areas where sedimentary cover obscures underlying bedrock. '
             'Field verification is strongly recommended for high-probability, high-uncertainty zones.',
-            styles['Highlight']
+            styles['Callout']
         ))
     else:
         story.append(Paragraph(
             '<b>Note:</b> The relatively low mean uncertainty indicates that the model is generally '
             'confident in its predictions across the study area. This suggests consistent geological '
             'signals and adequate training data coverage.',
-            styles['BodyText2']
+            styles['Body']
         ))
 
     story.append(Spacer(1, 0.3*cm))
     story.append(_make_uncertainty_chart(grid))
-    story.append(Spacer(1, 0.3*cm))
-    story.append(Paragraph('<i>Figure 4: Distribution of model uncertainty across sample points. '
-                           'Higher values indicate lower model confidence.</i>',
-                           styles['SmallText']))
-    story.append(Spacer(1, 0.5*cm))
+    story.append(Paragraph(
+        'Figure 4: Uncertainty distribution. Purple bars indicate low uncertainty (reliable); '
+        'pink bars indicate high uncertainty (needs field verification).',
+        styles['Caption']
+    ))
+    story.append(Spacer(1, 0.4*cm))
 
     n_high_u = int((grid.uncertainty > 0.15).sum())
     story.append(Paragraph(
         f'<b>Uncertainty Classification:</b> Of {len(grid)} sample points, <b>{n_high_u}</b> '
         f'({n_high_u/len(grid)*100:.1f}%) have uncertainty > 0.15, indicating areas where predictions '
         f'may be less reliable. These points should be prioritized for field verification.',
-        styles['BodyText2']
+        styles['Body']
     ))
     story.append(PageBreak())
 
-    # ═══ PAGE 6: RECOMMENDATIONS ═══
-    story.append(Paragraph('5. AI Interpretation & Recommendations', styles['SectionTitle']))
-    story.append(HRFlowable(width='100%', thickness=1, color=PRIMARY))
+
+def _page_ai(story, grid, b, geo_loaded, styles):
+    story.append(SectionHeader(5, 'AI Interpretation & Recommendations'))
     story.append(Spacer(1, 0.5*cm))
 
     interpretation = _generate_ai_interpretation(grid, b, geo_loaded)
     for para in interpretation.split('\n\n'):
         para = para.strip()
         if para:
-            story.append(Paragraph(para, styles['BodyText2']))
-            story.append(Spacer(1, 0.3*cm))
+            story.append(Paragraph(para, styles['Body']))
+            story.append(Spacer(1, 0.2*cm))
 
-    story.append(Spacer(1, 1*cm))
-    story.append(HRFlowable(width='100%', thickness=1, color=HexColor('#CCCCCC')))
+    story.append(Spacer(1, 1.5*cm))
+    story.append(HRFlowable(width='100%', thickness=0.5, color=GRAY_300))
     story.append(Spacer(1, 0.3*cm))
     story.append(Paragraph(
-        '<i>This report was automatically generated by NickelScope v3 — AI-GIS Nickel Laterite '
-        'Prospectivity Tool. Results should be validated with field investigation.</i>',
-        styles['SmallText']
+        'This report was automatically generated by NickelScope v3 \u2014 AI-GIS Nickel Laterite '
+        'Prospectivity Tool. Results should be validated with field investigation.',
+        styles['SmallNote']
     ))
 
-    doc.build(story)
+
+# ══════════════════════════════════════════════════════════════
+#  Main Generator
+# ══════════════════════════════════════════════════════════════
+
+def generate_report(grid, b, geo_loaded=None, output_path=None):
+    if geo_loaded is None:
+        geo_loaded = set()
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm,
+                            leftMargin=2*cm, rightMargin=2*cm)
+    styles = _styles()
+    story = []
+
+    _page_cover(story, b, geo_loaded, styles)
+    _page_aoi(story, grid, b, geo_loaded, styles)
+    _page_prospectivity(story, grid, b, styles)
+    _page_geology(story, grid, b, styles)
+    _page_uncertainty(story, grid, styles)
+    _page_ai(story, grid, b, geo_loaded, styles)
+
+    # Build with page numbers
+    page_num = [0]
+    def on_page(canvas, doc):
+        page_num[0] += 1
+        canvas.saveState()
+        footer = Footer(page_num[0])
+        footer.drawOn(canvas, doc.leftMargin, 0.8*cm)
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
     buf.seek(0)
     return buf.getvalue()
